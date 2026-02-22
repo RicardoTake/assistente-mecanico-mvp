@@ -6,10 +6,6 @@ export default async function handler(req, res) {
   try {
     const { message } = req.body;
 
-    if (!message) {
-      return res.status(400).json({ error: "Message is required" });
-    }
-
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
@@ -18,35 +14,17 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: [
-          {
-            role: "system",
-            content:
-              "Você é um especialista em mecânica automotiva. Sempre utilize a base técnica fornecida para responder de forma técnica e estruturada.",
-          },
-          {
-            role: "user",
-            content: message,
-          },
-        ],
-        tools: [
-          {
-            type: "file_search",
-            vector_store_ids: [process.env.OPENAI_VECTOR_STORE_ID],
-          },
-        ],
-        tool_choice: "auto"
+        input: message
       }),
     });
 
     const data = await response.json();
 
-    let reply = data.output_text || "Sem resposta do modelo.";
-
-    return res.status(200).json({ reply });
+    return res.status(200).json({
+      raw: data
+    });
 
   } catch (error) {
-    console.error(error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
