@@ -38,13 +38,7 @@ export default async function handler(req, res) {
     const payload = {
       model,
       instructions,
-      input: message,
-      tools: [
-        {
-          type: "file_search",
-          vector_store_ids: [vectorStoreId]
-        }
-      ]
+      input: message
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
