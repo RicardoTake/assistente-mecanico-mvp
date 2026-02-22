@@ -3,7 +3,9 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
 
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -18,7 +20,6 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.OPENAI_API_KEY;
     const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
-    console.log("VECTOR STORE ID:", vectorStoreId);
 
     if (!apiKey) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY in env vars" });
@@ -48,7 +49,8 @@ export default async function handler(req, res) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "Authorization": `Bearer ${apiKey}`,
+        "OpenAI-Project": "proj_NDWTzxiEXJ0cZX5LFGBtf08Y"
       },
       body: JSON.stringify(payload),
     });
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
       data?.output?.[0]?.content?.[0]?.text ||
       "Sem resposta do modelo.";
 
-    return res.status(200).json({ reply, raw: data });
+    return res.status(200).json({ reply });
 
   } catch (error) {
     return res.status(500).json({
