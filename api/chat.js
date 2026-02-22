@@ -20,9 +20,19 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    return res.status(200).json({
-      raw: data
-    });
+    let reply = "Sem resposta do modelo.";
+
+    if (
+      data.output &&
+      data.output[0] &&
+      data.output[0].content &&
+      data.output[0].content[0] &&
+      data.output[0].content[0].text
+    ) {
+      reply = data.output[0].content[0].text;
+    }
+
+    return res.status(200).json({ reply });
 
   } catch (error) {
     return res.status(500).json({ error: "Internal server error" });
