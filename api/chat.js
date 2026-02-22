@@ -19,17 +19,34 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         model: "gpt-4.1-mini",
         input: message,
+        tools: [
+          {
+            type: "file_search",
+            vector_store_ids: [process.env.OPENAI_VECTOR_STORE_ID],
+          },
+        ],
       }),
     });
 
     const data = await response.json();
 
-    const reply =
-      data.output?.[0]?.content?.[0]?.text ||
-      "Sem resposta do modelo.";
+    // Extrai o texto corretamente da nova estrutura
+    let reply = "Sem resposta do modelo.";
+
+    if (data.output && data.output.length > 0) {
+      const content = data.output[0].content;
+      if (content && content.length > 0) {
+        reply = content
+          .filter(item => item.type === "output_text")
+          .map(item => item.text)
+          .join("\n");
+      }
+    }
 
     return res.status(200).json({ reply });
+
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
