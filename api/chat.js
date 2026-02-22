@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS básico
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -32,21 +31,16 @@ export default async function handler(req, res) {
       model: "gpt-4.1-mini",
 
       instructions:
-        "Você é um assistente mecânico digital. Use prioritariamente a base técnica fornecida via file_search. Responda com clareza, segurança e objetividade. Se houver risco mecânico, destaque o nível de urgência.",
+        "Você é um assistente mecânico digital. Use prioritariamente a base técnica via file_search. Responda com clareza e destaque níveis de urgência quando aplicável.",
 
       input: message,
 
-      // Declara a ferramenta
       tools: [
-        { type: "file_search" }
-      ],
-
-      // Conecta a ferramenta à sua Vector Store
-      tool_resources: {
-        file_search: {
+        {
+          type: "file_search",
           vector_store_ids: [vectorStoreId]
         }
-      }
+      ]
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -67,22 +61,12 @@ export default async function handler(req, res) {
       });
     }
 
-    // Extração segura da resposta
-    let reply = "Sem resposta do modelo.";
+    const reply =
+      data.output_text ||
+      data?.output?.[0]?.content?.[0]?.text ||
+      "Sem resposta do modelo.";
 
-    if (data.output_text) {
-      reply = data.output_text;
-    } else if (data.output && data.output.length > 0) {
-      const content = data.output[0].content;
-      if (content && content.length > 0 && content[0].text) {
-        reply = content[0].text;
-      }
-    }
-
-    return res.status(200).json({
-      reply,
-      raw: data
-    });
+    return res.status(200).json({ reply, raw: data });
 
   } catch (error) {
     return res.status(500).json({
