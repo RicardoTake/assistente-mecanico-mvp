@@ -30,16 +30,22 @@ export default async function handler(req, res) {
 
     const data = await response.json();
 
-    // Extrai o texto corretamente da nova estrutura
+    console.log("FULL RESPONSE:", JSON.stringify(data, null, 2));
+
     let reply = "Sem resposta do modelo.";
 
-    if (data.output && data.output.length > 0) {
-      const content = data.output[0].content;
-      if (content && content.length > 0) {
-        reply = content
+    // Nova forma mais segura de extrair texto
+    if (data.output_text) {
+      reply = data.output_text;
+    } else if (data.output && data.output.length > 0) {
+      const messageOutput = data.output.find(o => o.type === "message");
+      if (messageOutput && messageOutput.content) {
+        const textParts = messageOutput.content
           .filter(item => item.type === "output_text")
-          .map(item => item.text)
-          .join("\n");
+          .map(item => item.text);
+        if (textParts.length > 0) {
+          reply = textParts.join("\n");
+        }
       }
     }
 
