@@ -29,12 +29,12 @@ export default async function handler(req, res) {
       instructions:
         "Você é um assistente mecânico digital. Use prioritariamente a base técnica via file_search. Responda com clareza e destaque níveis de urgência quando aplicável.",
       input: message,
-      tools: [{ type: "file_search" }],
-      tool_resources: {
-        file_search: {
+      tools: [
+        {
+          type: "file_search",
           vector_store_ids: [vectorStoreId]
         }
-      }
+      ]
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
