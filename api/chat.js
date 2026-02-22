@@ -18,36 +18,30 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "gpt-4.1-mini",
-        input: message,
+        input: [
+          {
+            role: "system",
+            content:
+              "Você é um especialista em mecânica automotiva. Sempre utilize a base técnica fornecida para responder de forma técnica e estruturada.",
+          },
+          {
+            role: "user",
+            content: message,
+          },
+        ],
         tools: [
           {
             type: "file_search",
             vector_store_ids: [process.env.OPENAI_VECTOR_STORE_ID],
           },
         ],
+        tool_choice: "auto"
       }),
     });
 
     const data = await response.json();
 
-    console.log("FULL RESPONSE:", JSON.stringify(data, null, 2));
-
-    let reply = "Sem resposta do modelo.";
-
-    // Nova forma mais segura de extrair texto
-    if (data.output_text) {
-      reply = data.output_text;
-    } else if (data.output && data.output.length > 0) {
-      const messageOutput = data.output.find(o => o.type === "message");
-      if (messageOutput && messageOutput.content) {
-        const textParts = messageOutput.content
-          .filter(item => item.type === "output_text")
-          .map(item => item.text);
-        if (textParts.length > 0) {
-          reply = textParts.join("\n");
-        }
-      }
-    }
+    let reply = data.output_text || "Sem resposta do modelo.";
 
     return res.status(200).json({ reply });
 
