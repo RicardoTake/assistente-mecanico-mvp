@@ -36,14 +36,11 @@ export default async function handler(req, res) {
       input: message,
 
       tools: [
-        { type: "file_search" }
-      ],
-
-      tool_resources: {
-        file_search: {
+        {
+          type: "file_search",
           vector_store_ids: [vectorStoreId]
         }
-      }
+      ]
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
