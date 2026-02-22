@@ -13,37 +13,17 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENAI_API_KEY;
     const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
 
-    if (!apiKey) return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
-    if (!vectorStoreId) return res.status(500).json({ error: "Missing OPENAI_VECTOR_STORE_ID" });
-
-    const PROJECT_ID = "proj_NDWTzxiEXJ0cZX5LFGBtf08Y";
-    const ORG_ID = "org_XXXXXXXX"; // <-- TROQUE PELO SEU ORG ID
-
-    const baseHeaders = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "OpenAI-Project": PROJECT_ID,
-      "OpenAI-Organization": ORG_ID,
-    };
-
-    // 1) PROVA: a key consegue enxergar a vector store?
-    const vsCheck = await fetch(`https://api.openai.com/v1/vector_stores/${vectorStoreId}`, {
-      method: "GET",
-      headers: baseHeaders,
-    });
-
-    const vsCheckData = await vsCheck.json().catch(() => ({}));
-
-    if (!vsCheck.ok) {
-      // Se cair aqui com "not found", não é payload. É escopo (org/projeto).
-      return res.status(500).json({
-        error: "Vector store not visible to this API key (scope/org/project issue).",
-        details: vsCheckData,
-        debug: { vectorStoreId, PROJECT_ID, ORG_ID },
-      });
+    if (!apiKey || !vectorStoreId) {
+      return res.status(500).json({ error: "Missing environment variables" });
     }
 
-    // 2) Agora sim: Responses + file_search (formato oficial atual)
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+      "OpenAI-Organization": "org-mRkCYQqUSq9Cg5JkRbYKB7fK",
+      "OpenAI-Project": "proj_NDWTzxiEXJ0cZX5LFGBtf08Y"
+    };
+
     const payload = {
       model: "gpt-4.1-mini",
       instructions:
@@ -52,21 +32,24 @@ export default async function handler(req, res) {
       tools: [{ type: "file_search" }],
       tool_resources: {
         file_search: {
-          vector_store_ids: [vectorStoreId],
-        },
-      },
+          vector_store_ids: [vectorStoreId]
+        }
+      }
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
-      headers: baseHeaders,
-      body: JSON.stringify(payload),
+      headers,
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(500).json({ error: "OpenAI API error", details: data });
+      return res.status(500).json({
+        error: "OpenAI API error",
+        details: data
+      });
     }
 
     const reply =
@@ -75,10 +58,11 @@ export default async function handler(req, res) {
       "Sem resposta do modelo.";
 
     return res.status(200).json({ reply });
+
   } catch (error) {
     return res.status(500).json({
       error: "Internal server error",
-      details: String(error?.message || error),
+      details: String(error?.message || error)
     });
   }
 }
