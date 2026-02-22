@@ -21,36 +21,32 @@ export default async function handler(req, res) {
     const apiKey = process.env.OPENAI_API_KEY;
     const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
 
-    if (!apiKey) {
-      return res.status(500).json({ error: "Missing OPENAI_API_KEY in env vars" });
-    }
-
-    if (!vectorStoreId) {
-      return res.status(500).json({ error: "Missing OPENAI_VECTOR_STORE_ID in env vars" });
+    if (!apiKey || !vectorStoreId) {
+      return res.status(500).json({ error: "Missing environment variables" });
     }
 
     const payload = {
       model: "gpt-4.1-mini",
-
-      instructions:
-        "Você é um assistente mecânico digital. Use prioritariamente a base técnica via file_search. Responda com clareza e destaque níveis de urgência quando aplicável.",
-
       input: message,
+      instructions:
+        "Você é um assistente mecânico digital. Use prioritariamente a base técnica via file_search.",
 
       tools: [
-        {
-          type: "file_search",
+        { type: "file_search" }
+      ],
+
+      tool_resources: {
+        file_search: {
           vector_store_ids: [vectorStoreId]
         }
-      ]
+      }
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-        "OpenAI-Project": "proj_NDWTzxiEXJ0cZX5LFGBtf08Y"
+        Authorization: `Bearer ${apiKey}`
       },
       body: JSON.stringify(payload),
     });
@@ -64,12 +60,9 @@ export default async function handler(req, res) {
       });
     }
 
-    const reply =
-      data.output_text ||
-      data?.output?.[0]?.content?.[0]?.text ||
-      "Sem resposta do modelo.";
-
-    return res.status(200).json({ reply });
+    return res.status(200).json({
+      reply: data.output_text || "Sem resposta"
+    });
 
   } catch (error) {
     return res.status(500).json({
