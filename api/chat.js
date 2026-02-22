@@ -18,6 +18,7 @@ export default async function handler(req, res) {
 
     const apiKey = process.env.OPENAI_API_KEY;
     const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
+    console.log("VECTOR STORE ID:", vectorStoreId);
 
     if (!apiKey) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY in env vars" });
