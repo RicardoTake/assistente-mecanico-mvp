@@ -1,5 +1,5 @@
 export default async function handler(req, res) {
-  // (Opcional) CORS básico — ajuda quando for integrar com front depois
+  // CORS básico
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -12,6 +12,7 @@ export default async function handler(req, res) {
 
   try {
     const { message } = req.body || {};
+
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
@@ -22,25 +23,30 @@ export default async function handler(req, res) {
     if (!apiKey) {
       return res.status(500).json({ error: "Missing OPENAI_API_KEY in env vars" });
     }
+
     if (!vectorStoreId) {
       return res.status(500).json({ error: "Missing OPENAI_VECTOR_STORE_ID in env vars" });
     }
 
     const payload = {
       model: "gpt-4.1-mini",
-      // Aqui é onde você cola o seu prompt CERTO (por enquanto deixei curto pra não quebrar)
+
       instructions:
-        "Você é um assistente mecânico digital. Responda com clareza e segurança. Se houver risco, recomende procurar um mecânico presencial. Use a base técnica quando for útil.",
+        "Você é um assistente mecânico digital. Use prioritariamente a base técnica fornecida via file_search. Responda com clareza, segurança e objetividade. Se houver risco mecânico, destaque o nível de urgência.",
 
       input: message,
 
-      // ✅ RAG: conecta na sua Vector Store
+      // Declara a ferramenta
       tools: [
-        {
-          type: "file_search",
-          vector_store_ids: [vectorStoreId],
-        },
+        { type: "file_search" }
       ],
+
+      // Conecta a ferramenta à sua Vector Store
+      tool_resources: {
+        file_search: {
+          vector_store_ids: [vectorStoreId]
+        }
+      }
     };
 
     const response = await fetch("https://api.openai.com/v1/responses", {
@@ -61,13 +67,23 @@ export default async function handler(req, res) {
       });
     }
 
-    // Respostas (forma mais estável)
-    const reply =
-      data.output_text ||
-      data?.output?.[0]?.content?.[0]?.text ||
-      "Sem resposta do modelo.";
+    // Extração segura da resposta
+    let reply = "Sem resposta do modelo.";
 
-    return res.status(200).json({ reply, raw: data });
+    if (data.output_text) {
+      reply = data.output_text;
+    } else if (data.output && data.output.length > 0) {
+      const content = data.output[0].content;
+      if (content && content.length > 0 && content[0].text) {
+        reply = content[0].text;
+      }
+    }
+
+    return res.status(200).json({
+      reply,
+      raw: data
+    });
+
   } catch (error) {
     return res.status(500).json({
       error: "Internal server error",
