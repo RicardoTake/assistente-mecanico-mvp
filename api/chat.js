@@ -8,30 +8,36 @@ export default async function handler(req, res) {
 
   try {
     const { message } = req.body || {};
+
     if (!message) {
       return res.status(400).json({ error: "Message is required" });
     }
 
+    // 🔐 Variáveis de ambiente
     const apiKey = process.env.OPENAI_API_KEY;
+    const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
+    const projectId = process.env.OPENAI_PROJECT_ID;
+    const orgId = process.env.OPENAI_ORG_ID;
+    const model = process.env.OPENAI_MODEL;
+    const instructions = process.env.ASSISTANT_INSTRUCTIONS;
 
-    // ✅ ID corrigido (com "dd")
-    const vectorStoreId = "vs_699a6133ddb481919119b58576db8d19";
-
-    if (!apiKey) {
-      return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
+    // ✅ Validação obrigatória
+    if (!apiKey || !vectorStoreId || !projectId || !orgId || !model || !instructions) {
+      return res.status(500).json({
+        error: "Missing required environment variables"
+      });
     }
 
     const headers = {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
-      "OpenAI-Organization": "org-mRkCYQqUSq9Cg5JkRbYKB7fK",
-      "OpenAI-Project": "proj_NDWTzxiEXJ0cZX5LFGBtf08Y"
+      "OpenAI-Organization": orgId,
+      "OpenAI-Project": projectId
     };
 
     const payload = {
-      model: "gpt-4.1-mini",
-      instructions:
-        "Você é um assistente mecânico digital. Use prioritariamente a base técnica via file_search. Responda com clareza e destaque níveis de urgência quando aplicável.",
+      model,
+      instructions,
       input: message,
       tools: [
         {
@@ -56,7 +62,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // ✅ Parsing correto da resposta
+    // 🔎 Parsing robusto da resposta
     let reply = "Sem resposta do modelo.";
 
     if (data.output && Array.isArray(data.output)) {
