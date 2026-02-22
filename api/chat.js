@@ -8,11 +8,13 @@ export default async function handler(req, res) {
 
   try {
     const { message } = req.body || {};
-    if (!message) return res.status(400).json({ error: "Message is required" });
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
 
     const apiKey = process.env.OPENAI_API_KEY;
 
-    // 🔴 IMPORTANTE: ID corrigido com "dd"
+    // ✅ ID corrigido (com "dd")
     const vectorStoreId = "vs_699a6133ddb481919119b58576db8d19";
 
     if (!apiKey) {
@@ -54,10 +56,20 @@ export default async function handler(req, res) {
       });
     }
 
-    const reply =
-      data.output_text ||
-      data?.output?.[0]?.content?.[0]?.text ||
-      "Sem resposta do modelo.";
+    // ✅ Parsing correto da resposta
+    let reply = "Sem resposta do modelo.";
+
+    if (data.output && Array.isArray(data.output)) {
+      for (const item of data.output) {
+        if (item.content && Array.isArray(item.content)) {
+          for (const content of item.content) {
+            if (content.type === "output_text" && content.text) {
+              reply = content.text;
+            }
+          }
+        }
+      }
+    }
 
     return res.status(200).json({ reply });
 
