@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
@@ -8,18 +7,22 @@ export default async function handler(req, res) {
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { message } = req.body || {};
-    if (!message) return res.status(400).json({ error: "Message is required" });
+    const body = req.body || {};
+    const singleMessage = body.message;
+    const messages = Array.isArray(body.messages) ? body.messages : null;
 
-    // Env
+    if (!singleMessage && (!messages || messages.length === 0)) {
+      return res.status(400).json({ error: "Message or messages[] is required" });
+    }
+
+    // 🔐 Variáveis de ambiente
     const apiKey = process.env.OPENAI_API_KEY;
-    const vectorStoreId = process.env.OPENAI_VECTOR_STORE_ID;
     const projectId = process.env.OPENAI_PROJECT_ID;
     const orgId = process.env.OPENAI_ORG_ID;
     const model = process.env.OPENAI_MODEL;
     const instructions = process.env.ASSISTANT_INSTRUCTIONS;
 
-    if (!apiKey || !vectorStoreId || !projectId || !orgId || !model || !instructions) {
+    if (!apiKey || !projectId || !orgId || !model || !instructions) {
       return res.status(500).json({ error: "Missing required environment variables" });
     }
 
@@ -30,115 +33,52 @@ export default async function handler(req, res) {
       "OpenAI-Project": projectId,
     };
 
-    // 🔥 chave do streaming (mantém compatível com Lovable)
-    const wantStream =
-      req.query?.stream === "1" || req.headers.accept?.includes("text/event-stream");
+    // ✅ Monta o input de conversa (memória simples)
+    // Recomendação MVP: mandar só as últimas 8 mensagens para manter custo/latência sob controle.
+    const MAX_TURNS = 8;
+
+    let input;
+    if (messages) {
+      const clipped = messages.slice(-MAX_TURNS).map((m) => ({
+        role: m.role === "assistant" ? "assistant" : "user",
+        content: String(m.content ?? ""),
+      }));
+      input = clipped;
+    } else {
+      input = String(singleMessage);
+    }
 
     const payload = {
       model,
       instructions,
-      input: message,
-      // quando streaming for usado, a OpenAI vai enviar em chunks
-      stream: wantStream,
+      input,
     };
 
-    const upstream = await fetch("https://api.openai.com/v1/responses", {
+    const response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
     });
 
-    if (!upstream.ok) {
-      const err = await upstream.json().catch(() => ({}));
-      return res.status(500).json({ error: "OpenAI API error", details: err });
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(500).json({ error: "OpenAI API error", details: data });
     }
 
-    // ✅ MODO 1: SEM STREAM (mantém tudo como está hoje)
-    if (!wantStream) {
-      const data = await upstream.json();
-
-      let reply = "Sem resposta do modelo.";
-      if (data.output && Array.isArray(data.output)) {
-        for (const item of data.output) {
-          if (item.content && Array.isArray(item.content)) {
-            for (const content of item.content) {
-              if (content.type === "output_text" && content.text) reply = content.text;
-            }
+    // 🔎 Parsing robusto
+    let reply = "Sem resposta do modelo.";
+    if (data.output && Array.isArray(data.output)) {
+      for (const item of data.output) {
+        if (item.content && Array.isArray(item.content)) {
+          for (const content of item.content) {
+            if (content.type === "output_text" && content.text) reply = content.text;
           }
         }
       }
-
-      return res.status(200).json({ reply });
     }
 
-    // ✅ MODO 2: STREAMING (SSE)
-    res.writeHead(200, {
-      "Content-Type": "text/event-stream; charset=utf-8",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-    });
-
-    // helper para mandar eventos SSE
-    const send = (event, data) => {
-      res.write(`event: ${event}\n`);
-      res.write(`data: ${JSON.stringify(data)}\n\n`);
-    };
-
-    send("status", { ok: true });
-
-    const reader = upstream.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let buffer = "";
-    let fullText = "";
-
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-
-      // A Responses API em streaming envia linhas estilo SSE ("data: ...")
-      // Vamos processar linha a linha.
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed.startsWith("data:")) continue;
-
-        const dataStr = trimmed.replace(/^data:\s*/, "");
-        if (dataStr === "[DONE]") {
-          send("done", { reply: fullText });
-          res.end();
-          return;
-        }
-
-        let evt;
-        try {
-          evt = JSON.parse(dataStr);
-        } catch {
-          continue;
-        }
-
-        // Procurar tokens de texto nos eventos
-        // (varia por tipo de evento; este parser é tolerante)
-        const deltaText =
-          evt?.delta?.text ||
-          evt?.response?.output_text ||
-          evt?.output_text ||
-          evt?.text ||
-          "";
-
-        if (deltaText) {
-          fullText += deltaText;
-          send("delta", { text: deltaText });
-        }
-      }
-    }
-
-    // fallback caso não venha [DONE]
-    send("done", { reply: fullText || "Sem resposta do modelo." });
-    res.end();
+    return res.status(200).json({ reply });
   } catch (error) {
     return res.status(500).json({
       error: "Internal server error",
