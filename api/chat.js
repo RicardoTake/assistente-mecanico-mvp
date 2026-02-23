@@ -3,25 +3,40 @@ import { createClient } from "@supabase/supabase-js";
 export default async function handler(req, res) {
   try {
     // ================================
-    // 1️⃣ Permitir apenas POST
+    // 🔐 CORS CONFIG
+    // ================================
+    const origin = req.headers.origin || "";
+    const allowedDomain = process.env.ALLOWED_ORIGIN; // lovable.app
+
+    if (origin && origin.includes(allowedDomain)) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+
+    // Permitir preflight request
+    if (req.method === "OPTIONS") {
+      return res.status(200).end();
+    }
+
+    // ================================
+    // Permitir apenas POST
     // ================================
     if (req.method !== "POST") {
       return res.status(405).json({ error: "Method not allowed" });
     }
 
     // ================================
-    // 2️⃣ Validação de ORIGIN (segurança)
-    // Permite qualquer subdomínio lovable.app
+    // Validar origem (segurança)
     // ================================
-    const origin = req.headers.origin || "";
-    const allowedDomain = process.env.ALLOWED_ORIGIN; // deve ser: lovable.app
-
     if (!origin.includes(allowedDomain)) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
     // ================================
-    // 3️⃣ Variáveis de ambiente obrigatórias
+    // Variáveis obrigatórias
     // ================================
     const {
       SUPABASE_URL,
@@ -36,20 +51,18 @@ export default async function handler(req, res) {
       !OPENAI_API_KEY ||
       !MAX_MESSAGES_PER_DAY
     ) {
-      return res.status(500).json({ error: "Missing environment variables" });
+      console.error("Missing environment variables");
+      return res.status(500).json({ error: "Server configuration error" });
     }
 
     // ================================
-    // 4️⃣ Inicializar Supabase
+    // Inicializar Supabase
     // ================================
     const supabase = createClient(
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY
     );
 
-    // ================================
-    // 5️⃣ Pegar dados do body
-    // ================================
     const { message, session_id } = req.body;
 
     if (!message || !session_id) {
@@ -57,7 +70,7 @@ export default async function handler(req, res) {
     }
 
     // ================================
-    // 6️⃣ Verificar limite diário
+    // Limite diário por session_id
     // ================================
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -69,7 +82,8 @@ export default async function handler(req, res) {
       .gte("created_at", todayStart.toISOString());
 
     if (countError) {
-      return res.status(500).json({ error: "Error checking usage" });
+      console.error("Usage check error:", countError);
+      return res.status(500).json({ error: "Usage check failed" });
     }
 
     if (count >= parseInt(MAX_MESSAGES_PER_DAY)) {
@@ -77,7 +91,7 @@ export default async function handler(req, res) {
     }
 
     // ================================
-    // 7️⃣ Chamar OpenAI
+    // Chamada OpenAI
     // ================================
     const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
@@ -105,14 +119,17 @@ export default async function handler(req, res) {
     );
 
     if (!openaiResponse.ok) {
-      return res.status(500).json({ error: "OpenAI API error" });
+      const errorText = await openaiResponse.text();
+      console.error("OpenAI error:", errorText);
+      return res.status(500).json({ error: "AI service error" });
     }
 
     const data = await openaiResponse.json();
-    const assistantReply = data.choices[0].message.content;
+    const assistantReply =
+      data?.choices?.[0]?.message?.content || "Erro ao gerar resposta.";
 
     // ================================
-    // 8️⃣ Salvar no Supabase
+    // Salvar no Supabase
     // ================================
     const { error: insertError } = await supabase
       .from("conversations")
@@ -125,15 +142,16 @@ export default async function handler(req, res) {
       ]);
 
     if (insertError) {
-      return res.status(500).json({ error: "Error saving conversation" });
+      console.error("Insert error:", insertError);
+      return res.status(500).json({ error: "Database error" });
     }
 
     // ================================
-    // 9️⃣ Retornar resposta
+    // Retornar resposta
     // ================================
     return res.status(200).json({ reply: assistantReply });
   } catch (error) {
-    console.error(error);
+    console.error("Server error:", error);
     return res.status(500).json({ error: "Internal server error" });
   }
 }
