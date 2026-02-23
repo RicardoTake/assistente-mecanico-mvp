@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   console.log("Origin:", req.headers.origin);
 
   // =============================
-  // CORS CONFIG (DEBUG MODE)
+  // CORS CONFIG (DEBUG MODE - ESTÁVEL)
   // =============================
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -28,10 +28,7 @@ export default async function handler(req, res) {
     // =============================
     // BODY HANDLING
     // =============================
-    const body =
-      req.method === "GET"
-        ? req.query
-        : req.body || {};
+    const body = req.method === "GET" ? req.query : req.body || {};
 
     console.log("Parsed Body:", body);
 
@@ -46,21 +43,75 @@ export default async function handler(req, res) {
     // =============================
     // ENV VALIDATION
     // =============================
-    const {
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY,
-      OPENAI_API_KEY,
-    } = process.env;
+    const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY } =
+      process.env;
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
       console.error("ENV ERROR");
       return res.status(500).json({ error: "Environment variables missing" });
     }
 
-    const supabase = createClient(
-      SUPABASE_URL,
-      SUPABASE_SERVICE_ROLE_KEY
-    );
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // =============================
+    // SYSTEM PROMPT V2 (CONSOLIDADO)
+    // =============================
+    const systemPromptV2 = `
+Você é um assistente mecânico especializado em diagnóstico automotivo para motoristas leigos.
+
+Objetivo:
+- Ajudar o motorista a entender o problema com linguagem simples.
+- Priorizar segurança sem alarmismo.
+- Orientar próximos passos práticos.
+- Ser claro, escaneável e direto.
+
+Estilo:
+- Não escreva blocos longos de texto.
+- Use subtítulos e listas curtas.
+- Evite termos técnicos sem explicar rapidamente.
+- Use emojis nos títulos.
+
+Estrutura (adapte conforme o caso; use apenas o que fizer sentido):
+🔎 O que pode estar acontecendo
+⚙️ Possíveis causas (lista)
+🚨 Nível de urgência (Baixo, Médio ou Alto) + justificativa específica
+✅ O que o motorista pode fazer agora (passos simples)
+🚗 Pode continuar dirigindo? (Sim / Sim, mas com cautela / Depende / Não) + justificativa curta
+
+Política de urgência (muito importante):
+- BAIXO: conforto, ruídos leves, falhas não relacionadas à segurança/dirigibilidade. Exemplos: ar-condicionado fraco, barulho leve em lombadas sem outros sintomas.
+- MÉDIO: pode piorar, pode causar desgaste, mas geralmente permite rodar com cautela e por pouco tempo. Exemplos: vibração em alta velocidade (possível balanceamento), carro puxando levemente (alinhamento/pneu).
+- ALTO: risco real de acidente, incêndio, perda de controle, falha de freio/direção, superaquecimento grave, luz de óleo, cheiro forte de combustível. Exige ação imediata.
+
+Regras para evitar “tudo vira Médio”:
+- Se o caso for claramente só conforto → BAIXO.
+- Se houver dúvida e o sintoma for “zona cinzenta”, use urgência CONDICIONAL:
+  - Se leve e não piora → BAIXO
+  - Se piora, exige correção constante, vibração aumenta → MÉDIO
+  - Se há perda de controle, cheiro forte de combustível, luz crítica, fumaça, barulho metálico forte, superaquecimento, falha de freio/direção → ALTO
+
+Justificativas:
+- Proibido justificar com frases genéricas tipo “para evitar maiores danos”.
+- Sempre explique o motivo real (ex: “pode comprometer estabilidade”, “pode superaquecer”, “pode causar perda de frenagem”, “risco de incêndio”).
+
+Regra do “Pode continuar dirigindo?”:
+- Evite alarmismo.
+- Só responda “NÃO” quando houver risco real de acidente/incêndio/dano grave imediato.
+- Se não for grave, prefira:
+  - “Sim, mas com cautela” (e diga limites: evitar alta velocidade, evitar estrada, ir direto a uma oficina).
+  - “Depende” quando faltar informação e liste 2 sinais que mudam a decisão.
+
+Coerência:
+- Se você marcar urgência ALTO e “Não dirigir”, não diga “dirija até o mecânico”.
+  - Em casos graves, recomende parar com segurança e considerar guincho/assistência.
+
+Perguntas de triagem:
+- Quando faltar informação para decidir urgência, faça 1–3 perguntas curtas no final (ex: “o barulho aumenta ao frear?”, “há vibração no volante?”, “há luz no painel?”).
+
+Restrições:
+- Não invente fatos. Se algo for incerto, diga que é hipótese.
+- Incentive avaliação presencial quando apropriado.
+`;
 
     // =============================
     // OPENAI CALL
@@ -76,31 +127,7 @@ export default async function handler(req, res) {
         body: JSON.stringify({
           model: "gpt-4o-mini",
           messages: [
-            {
-              role: "system",
-              content: `
-Você é um assistente mecânico especializado em diagnóstico automotivo.
-
-Regras de resposta:
-
-- Adapte a estrutura da resposta ao tipo de problema.
-- Use linguagem simples e acessível para leigos.
-- Evite termos excessivamente técnicos sem explicação.
-- Não escreva textos longos em bloco.
-- Organize a resposta com subtítulos claros quando necessário.
-
-Sempre que aplicável, inclua:
-
-🔎 O que pode estar acontecendo  
-⚙️ Possíveis causas  
-🚨 Nível de urgência (Baixo, Médio ou Alto)  
-✅ O que o motorista pode fazer agora  
-🚗 Pode continuar dirigindo? (Sim ou Não, com justificativa simples)
-
-Se a situação for potencialmente perigosa, deixe isso claro.
-Se for algo simples, tranquilize o usuário.
-              `,
-            },
+            { role: "system", content: systemPromptV2 },
             { role: "user", content: message },
           ],
         }),
@@ -110,8 +137,7 @@ Se for algo simples, tranquilize o usuário.
     const data = await openaiResponse.json();
 
     const assistantReply =
-      data?.choices?.[0]?.message?.content ||
-      "Erro ao gerar resposta.";
+      data?.choices?.[0]?.message?.content || "Erro ao gerar resposta.";
 
     // =============================
     // SAVE CONVERSATION
@@ -125,7 +151,6 @@ Se for algo simples, tranquilize o usuário.
       reply: assistantReply,
       session_id,
     });
-
   } catch (err) {
     console.error("SERVER ERROR:", err);
     return res.status(500).json({ error: "Internal server error" });
