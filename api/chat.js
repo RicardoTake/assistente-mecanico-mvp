@@ -11,7 +11,6 @@ export default async function handler(req, res) {
   // =============================
   const origin = req.headers.origin || "";
 
-  // Permite qualquer subdomínio lovable.app ou lovable.dev
   if (
     origin.includes("lovable.app") ||
     origin.includes("lovable.dev")
@@ -88,8 +87,28 @@ export default async function handler(req, res) {
           messages: [
             {
               role: "system",
-              content:
-                "Você é um assistente mecânico especializado em diagnóstico automotivo.",
+              content: `
+Você é um assistente mecânico especializado em diagnóstico automotivo.
+
+Regras de resposta:
+
+- Adapte a estrutura da resposta ao tipo de problema.
+- Use linguagem simples e acessível para leigos.
+- Evite termos excessivamente técnicos sem explicação.
+- Não escreva textos longos em bloco.
+- Organize a resposta com subtítulos claros quando necessário.
+
+Sempre que aplicável, inclua:
+
+🔎 O que pode estar acontecendo  
+⚙️ Possíveis causas  
+🚨 Nível de urgência (Baixo, Médio ou Alto)  
+✅ O que o motorista pode fazer agora  
+🚗 Pode continuar dirigindo? (Sim ou Não, com justificativa simples)
+
+Se a situação for potencialmente perigosa, deixe isso claro.
+Se for algo simples, tranquilize o usuário.
+              `,
             },
             { role: "user", content: message },
           ],
