@@ -29,10 +29,11 @@ export default async function handler(req, res) {
     // BODY HANDLING
     // =============================
     const body = req.method === "GET" ? req.query : req.body || {};
-
     console.log("Parsed Body:", body);
 
     const message = body.message || body.text || body.prompt;
+
+    // session_id: ideal vir do frontend. Se não vier, criamos um novo.
     const session_id = body.session_id || crypto.randomUUID();
 
     if (!message) {
@@ -114,8 +115,62 @@ Restrições:
 `;
 
     // =============================
-    // OPENAI CALL
+    // MEMORY: FETCH LAST N MESSAGES
     // =============================
+    const HISTORY_LIMIT = 6;
+
+    let historyMessages = [];
+    try {
+      // Tentativa 1: ordenar por created_at (padrão do Supabase)
+      let { data: rows, error } = await supabase
+        .from("conversations")
+        .select("role, message, created_at")
+        .eq("session_id", session_id)
+        .order("created_at", { ascending: false })
+        .limit(HISTORY_LIMIT);
+
+      // Se a coluna created_at não existir ou houver erro, tentar fallback por id
+      if (error) {
+        console.warn("History fetch (created_at) failed:", error?.message);
+
+        const fallback = await supabase
+          .from("conversations")
+          .select("role, message, id")
+          .eq("session_id", session_id)
+          .order("id", { ascending: false })
+          .limit(HISTORY_LIMIT);
+
+        if (fallback.error) {
+          console.warn("History fetch (id) failed:", fallback.error?.message);
+          rows = [];
+        } else {
+          rows = fallback.data || [];
+        }
+      }
+
+      // rows vem DESC; reverte para ASC para manter a conversa na ordem
+      const ordered = (rows || []).slice().reverse();
+
+      historyMessages = ordered
+        .filter((r) => r?.role && r?.message)
+        .map((r) => ({
+          role: r.role === "assistant" ? "assistant" : "user",
+          content: String(r.message),
+        }));
+    } catch (e) {
+      console.warn("History fetch exception:", e?.message || e);
+      historyMessages = [];
+    }
+
+    // =============================
+    // OPENAI CALL (COM CONTEXTO)
+    // =============================
+    const openaiMessages = [
+      { role: "system", content: systemPromptV2 },
+      ...historyMessages,
+      { role: "user", content: message },
+    ];
+
     const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -126,10 +181,7 @@ Restrições:
         },
         body: JSON.stringify({
           model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPromptV2 },
-            { role: "user", content: message },
-          ],
+          messages: openaiMessages,
         }),
       }
     );
@@ -140,7 +192,7 @@ Restrições:
       data?.choices?.[0]?.message?.content || "Erro ao gerar resposta.";
 
     // =============================
-    // SAVE CONVERSATION
+    // SAVE CONVERSATION (USER + ASSISTANT)
     // =============================
     await supabase.from("conversations").insert([
       { session_id, role: "user", message },
@@ -150,6 +202,8 @@ Restrições:
     return res.status(200).json({
       reply: assistantReply,
       session_id,
+      // opcional: útil para debug
+      // history_used: historyMessages.length,
     });
   } catch (err) {
     console.error("SERVER ERROR:", err);
