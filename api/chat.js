@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
@@ -24,15 +24,22 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  if (req.method !== "POST") {
+  // =============================
+  // METHOD VALIDATION
+  // =============================
+  if (req.method !== "POST" && req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
     // =============================
-    // BODY PARSING (usar nativo do Next/Vercel)
+    // BODY HANDLING
     // =============================
-    const body = req.body || {};
+    const body =
+      req.method === "GET"
+        ? req.query
+        : req.body || {};
+
     console.log("Parsed Body:", body);
 
     const message = body.message || body.text || body.prompt;
