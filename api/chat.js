@@ -1,23 +1,39 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
+async function parseBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", chunk => {
+      data += chunk;
+    });
+    req.on("end", () => {
+      try {
+        const parsed = JSON.parse(data || "{}");
+        resolve(parsed);
+      } catch (err) {
+        resolve({});
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
 export default async function handler(req, res) {
   console.log("==== REQUEST RECEIVED ====");
   console.log("Method:", req.method);
   console.log("Origin:", req.headers.origin);
-  console.log("Body:", req.body);
 
   const origin = req.headers.origin || "";
   const allowedDomain = (process.env.ALLOWED_ORIGIN || "").trim();
 
-  const isAllowedOrigin =
-    (!!origin &&
-      !!allowedDomain &&
-      (origin.endsWith(`.${allowedDomain}`) ||
-        origin.includes(allowedDomain))) ||
-    origin.startsWith("http://localhost");
-
-  if (isAllowedOrigin) {
+  if (origin && allowedDomain && origin.includes(allowedDomain)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
@@ -30,28 +46,26 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
 
   try {
+    const body = await parseBody(req);
+    console.log("Parsed Body:", body);
+
+    const message = body.message || body.text || body.prompt;
+    const session_id = body.session_id || crypto.randomUUID();
+
+    if (!message) {
+      console.error("MESSAGE MISSING");
+      return res.status(400).json({ error: "Missing message" });
+    }
+
     const {
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY,
       OPENAI_API_KEY,
-      MAX_MESSAGES_PER_DAY,
     } = process.env;
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
       console.error("ENV ERROR");
       return res.status(500).json({ error: "Env error" });
-    }
-
-    const body = req.body || {};
-    const message = body.message || body.text || body.prompt;
-    const session_id = body.session_id || crypto.randomUUID();
-
-    console.log("Parsed message:", message);
-    console.log("Session ID:", session_id);
-
-    if (!message) {
-      console.error("MESSAGE MISSING");
-      return res.status(400).json({ error: "Missing message" });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
