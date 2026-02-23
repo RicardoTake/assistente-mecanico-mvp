@@ -1,35 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-async function parseBody(req) {
-  return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", chunk => {
-      data += chunk;
-    });
-    req.on("end", () => {
-      try {
-        const parsed = JSON.parse(data || "{}");
-        resolve(parsed);
-      } catch (err) {
-        resolve({});
-      }
-    });
-    req.on("error", reject);
-  });
-}
-
 export default async function handler(req, res) {
   console.log("==== REQUEST RECEIVED ====");
   console.log("Method:", req.method);
   console.log("Origin:", req.headers.origin);
 
+  // =============================
+  // CORS CONFIG
+  // =============================
   const origin = req.headers.origin || "";
   const allowedDomain = (process.env.ALLOWED_ORIGIN || "").trim();
 
@@ -41,12 +20,19 @@ export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Credentials", "true");
 
-  if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST")
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
-    const body = await parseBody(req);
+    // =============================
+    // BODY PARSING (usar nativo do Next/Vercel)
+    // =============================
+    const body = req.body || {};
     console.log("Parsed Body:", body);
 
     const message = body.message || body.text || body.prompt;
@@ -57,6 +43,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing message" });
     }
 
+    // =============================
+    // ENV VALIDATION
+    // =============================
     const {
       SUPABASE_URL,
       SUPABASE_SERVICE_ROLE_KEY,
@@ -65,11 +54,17 @@ export default async function handler(req, res) {
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENAI_API_KEY) {
       console.error("ENV ERROR");
-      return res.status(500).json({ error: "Env error" });
+      return res.status(500).json({ error: "Environment variables missing" });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = createClient(
+      SUPABASE_URL,
+      SUPABASE_SERVICE_ROLE_KEY
+    );
 
+    // =============================
+    // OPENAI CALL
+    // =============================
     const openaiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -93,16 +88,24 @@ export default async function handler(req, res) {
     );
 
     const data = await openaiResponse.json();
+
     const assistantReply =
       data?.choices?.[0]?.message?.content ||
       "Erro ao gerar resposta.";
 
+    // =============================
+    // SAVE CONVERSATION
+    // =============================
     await supabase.from("conversations").insert([
       { session_id, role: "user", message },
       { session_id, role: "assistant", message: assistantReply },
     ]);
 
-    return res.status(200).json({ reply: assistantReply, session_id });
+    return res.status(200).json({
+      reply: assistantReply,
+      session_id,
+    });
+
   } catch (err) {
     console.error("SERVER ERROR:", err);
     return res.status(500).json({ error: "Internal server error" });
