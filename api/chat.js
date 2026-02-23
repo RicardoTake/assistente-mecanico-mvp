@@ -7,12 +7,15 @@ export default async function handler(req, res) {
   console.log("Origin:", req.headers.origin);
 
   // =============================
-  // CORS CONFIG
+  // CORS CONFIG (ROBUSTO)
   // =============================
   const origin = req.headers.origin || "";
-  const allowedDomain = (process.env.ALLOWED_ORIGIN || "").trim();
 
-  if (origin && allowedDomain && origin.includes(allowedDomain)) {
+  // Permite qualquer subdomínio lovable.app ou lovable.dev
+  if (
+    origin.includes("lovable.app") ||
+    origin.includes("lovable.dev")
+  ) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
