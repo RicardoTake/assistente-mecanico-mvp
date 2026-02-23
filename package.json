@@ -1,0 +1,27 @@
+{
+  "dependencies": {
+    "@supabase/supabase-js": "^2.97.0"
+  },
+  "name": "assistente-mecanico-mvp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/RicardoTake/assistente-mecanico-mvp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/RicardoTake/assistente-mecanico-mvp/issues"
+  },
+  "homepage": "https://github.com/RicardoTake/assistente-mecanico-mvp#readme"
+}
