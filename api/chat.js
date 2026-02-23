@@ -7,20 +7,11 @@ export default async function handler(req, res) {
   console.log("Origin:", req.headers.origin);
 
   // =============================
-  // CORS CONFIG (ROBUSTO)
+  // CORS CONFIG (DEBUG MODE)
   // =============================
-  const origin = req.headers.origin || "";
-
-  if (
-    origin.includes("lovable.app") ||
-    origin.includes("lovable.dev")
-  ) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
